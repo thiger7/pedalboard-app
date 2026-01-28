@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudFormation template for Terraform S3 backend
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: pedalboard-demo
+    Description: Used for naming the S3 bucket for the Terraform backend.
+    AllowedPattern: "^[a-z\\-]+$"
+    ConstraintDescription: The project name must contain only lowercase letters and hyphens.
+  Env:
+    Type: String
+    Default: prod
+    Description: The environment where the system runs. (ex. prod, stg, dev etc...)
+    AllowedPattern: "^[a-z]+$"
+    ConstraintDescription: The Env must contain only lowercase letters.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Parameters:
+          - ProjectName
+          - Env
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Sub ${ProjectName}-${Env}-tfstate
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: NoncurrentVersionExpiration
+            NoncurrentVersionExpiration:
+              NewerNoncurrentVersions: 20
+              NoncurrentDays: 1
+            Status: Enabled
+
+Outputs:
+  S3Bucket:
+    Value: !Ref S3Bucket

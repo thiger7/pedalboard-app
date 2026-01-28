@@ -1,0 +1,11 @@
+aws_profile    = "your-aws-profile"
+environment    = "prod"
+aws_account_id = "123456789012"
+
+# API Gateway
+api_throttle_rate_limit  = 100
+api_throttle_burst_limit = 50
+
+# Lambda
+lambda_memory_size = 256
+lambda_timeout     = 30
