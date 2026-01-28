@@ -57,8 +57,8 @@ function App() {
 
       const result = await processS3Audio(uploadedKey, effectsToChain(effects));
       if (result) {
-        setInputAudioUrl(null); // S3 mode doesn't support input preview yet
-        setOutputAudioUrl(result.download_url);
+        setInputAudioUrl(result.input_normalized_url);
+        setOutputAudioUrl(result.output_normalized_url);
       }
     } else {
       // Local mode

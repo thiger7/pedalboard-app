@@ -46,4 +46,6 @@ export interface S3ProcessResponse {
   output_key: string;
   download_url: string;
   effects_applied: string[];
+  input_normalized_url: string;
+  output_normalized_url: string;
 }
