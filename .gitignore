@@ -33,5 +33,5 @@ Thumbs.db
 *.log
 
 # Project specific
-audio/
+backend/audio/
 client/public/images/original/

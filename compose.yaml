@@ -7,8 +7,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./audio/input:/app/audio/input:ro
-      - ./audio/output:/app/audio/output
+      - ./backend/audio/input:/app/audio/input:ro
+      - ./backend/audio/output:/app/audio/output
       - ./backend/lambda_function.py:/app/lambda_function.py:ro
       - ./backend/main.py:/app/main.py:ro
     environment:
