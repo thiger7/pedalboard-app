@@ -5,3 +5,7 @@ matplotlib
 fastapi
 uvicorn[standard]
 python-multipart
+pytest
+httpx
+ruff
+pyright

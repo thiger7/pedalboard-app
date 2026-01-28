@@ -32,6 +32,11 @@ Thumbs.db
 # Build
 tsconfig.tsbuildinfo
 
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
 # Logs
 *.log
 
