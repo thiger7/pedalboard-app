@@ -13,7 +13,7 @@ services:
       # 出力音声ファイル（読み書き可能）
       - ./audio/output:/app/audio/output
       # 開発時のホットリロード用
-      - ./lambda_function.py:/app/lambda_function.py:ro
+      - ./backend/lambda_function.py:/app/lambda_function.py:ro
       - ./backend/main.py:/app/main.py:ro
     environment:
       - PYTHONUNBUFFERED=1
