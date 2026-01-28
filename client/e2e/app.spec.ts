@@ -1,7 +1,26 @@
 import { expect, test } from '@playwright/test';
 
+// ローカルモードをモックするヘルパー
+async function mockLocalMode(page: import('@playwright/test').Page) {
+  await page.route('**/api/health', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', mode: 'local' }),
+    });
+  });
+  await page.route('**/api/input-files', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ files: ['test1.wav', 'test2.wav'] }),
+    });
+  });
+}
+
 test.describe('Pedalboard Demo App', () => {
   test.beforeEach(async ({ page }) => {
+    await mockLocalMode(page);
     await page.goto('/');
   });
 
@@ -50,6 +69,7 @@ test.describe('Pedalboard Demo App', () => {
 
 test.describe('エフェクト操作', () => {
   test.beforeEach(async ({ page }) => {
+    await mockLocalMode(page);
     await page.goto('/');
   });
 
@@ -75,6 +95,23 @@ test.describe('エフェクト操作', () => {
 
 test.describe('音声処理フロー (Local Mode)', () => {
   test('ファイル選択後に処理を実行できる', async ({ page }) => {
+    await mockLocalMode(page);
+
+    // Process エンドポイントをモック
+    await page.route('**/api/process', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          output_file: 'output.wav',
+          download_url: '/api/audio/output.wav',
+          effects_applied: ['Chorus'],
+          input_normalized: 'input_norm.wav',
+          output_normalized: 'output_norm.wav',
+        }),
+      });
+    });
+
     await page.goto('/');
 
     // Wait for file list to load
@@ -108,13 +145,11 @@ test.describe('音声処理フロー (Local Mode)', () => {
       await expect(processButton).toBeEnabled();
       await processButton.click();
 
-      // Wait for processing to complete
-      await expect(processButton).toHaveText('Processing...', {
-        timeout: 5000,
-      });
+      // Wait for processing to complete (モックのため即座に完了する可能性がある)
       await expect(processButton).toHaveText('Process Audio', {
-        timeout: 60000,
+        timeout: 10000,
       });
+      await expect(processButton).toBeEnabled();
     }
   });
 });
