@@ -1,8 +1,8 @@
 import json
-import os
-from pedalboard import Pedalboard, Chorus, Reverb, Gain, Compressor, Distortion, Delay
-from pedalboard.io import AudioFile
+
 import boto3
+from pedalboard import Chorus, Compressor, Delay, Distortion, Gain, Pedalboard, Reverb
+from pedalboard.io import AudioFile
 
 # エフェクトマッピング（画像名 → pedalboardクラス + デフォルトパラメータ）
 # BOSS実機の音響特性に準拠
@@ -118,16 +118,19 @@ def handler(event, context):
                 'body': json.dumps({
                     'message': 'Audio processed successfully',
                     's3_location': f"s3://{event['s3_bucket']}/{s3_key}",
-                    'effects_applied': [e.get('name') for e in effect_chain] if effect_chain else ['default']
+                    'effects_applied': (
+                        [e.get('name') for e in effect_chain] if effect_chain else ['default']
+                    )
                 })
             }
 
+        applied = [e.get('name') for e in effect_chain] if effect_chain else ['default']
         return {
             'statusCode': 200,
             'body': json.dumps({
                 'message': 'Audio processed successfully',
                 'output_path': output_path,
-                'effects_applied': [e.get('name') for e in effect_chain] if effect_chain else ['default']
+                'effects_applied': applied
             })
         }
 

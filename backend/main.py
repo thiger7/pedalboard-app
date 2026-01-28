@@ -8,12 +8,12 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 from pedalboard.io import AudioFile
+from pydantic import BaseModel
 
 # lambda_function.pyをインポートするためにパスを追加
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from lambda_function import handler, EFFECT_MAPPING
+from lambda_function import EFFECT_MAPPING, handler
 
 # 表示用に正規化された音声を保存するディレクトリ
 AUDIO_NORMALIZED_DIR = Path(os.environ.get("AUDIO_OUTPUT_DIR", "/app/audio/output")) / "normalized"
@@ -157,7 +157,8 @@ async def process_audio(request: ProcessRequest):
 
     if result["statusCode"] != 200:
         import json
-        error_body = json.loads(result["body"]) if isinstance(result["body"], str) else result["body"]
+        body = result["body"]
+        error_body = json.loads(body) if isinstance(body, str) else body
         raise HTTPException(
             status_code=result["statusCode"],
             detail=error_body.get("error", "Unknown error")
