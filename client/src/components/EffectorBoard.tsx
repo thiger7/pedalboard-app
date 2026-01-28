@@ -1,32 +1,35 @@
 import {
-  DndContext,
   closestCenter,
+  DndContext,
+  type DragEndEvent,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
+  horizontalListSortingStrategy,
   SortableContext,
   sortableKeyboardCoordinates,
-  horizontalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { EffectorCard } from './EffectorCard';
 import type { Effect } from '../types/effects';
+import { EffectorCard } from './EffectorCard';
 
 interface EffectorBoardProps {
   effects: Effect[];
   onEffectsChange: (effects: Effect[]) => void;
 }
 
-export function EffectorBoard({ effects, onEffectsChange }: EffectorBoardProps) {
+export function EffectorBoard({
+  effects,
+  onEffectsChange,
+}: EffectorBoardProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -41,9 +44,7 @@ export function EffectorBoard({ effects, onEffectsChange }: EffectorBoardProps) 
 
   const handleToggle = (id: string) => {
     onEffectsChange(
-      effects.map((e) =>
-        e.id === id ? { ...e, enabled: !e.enabled } : e
-      )
+      effects.map((e) => (e.id === id ? { ...e, enabled: !e.enabled } : e)),
     );
   };
 

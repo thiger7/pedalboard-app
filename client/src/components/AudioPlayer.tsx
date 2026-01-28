@@ -7,7 +7,11 @@ interface AudioPlayerProps {
   color?: string;
 }
 
-export function AudioPlayer({ label, audioUrl, color = '#3b82f6' }: AudioPlayerProps) {
+export function AudioPlayer({
+  label,
+  audioUrl,
+  color = '#3b82f6',
+}: AudioPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -35,7 +39,7 @@ export function AudioPlayer({ label, audioUrl, color = '#3b82f6' }: AudioPlayerP
       barWidth: 2,
       barGap: 1,
       barRadius: 2,
-      normalize: true,  // wavesurfer側で正規化（バックエンドで同じピークに揃えているので縮尺は同じ）
+      normalize: true, // wavesurfer側で正規化（バックエンドで同じピークに揃えているので縮尺は同じ）
     });
 
     wavesurfer.load(audioUrl);
@@ -75,9 +79,7 @@ export function AudioPlayer({ label, audioUrl, color = '#3b82f6' }: AudioPlayerP
         <div className="audio-player-header">
           <span className="audio-player-label">{label}</span>
         </div>
-        <div className="audio-player-placeholder">
-          No audio loaded
-        </div>
+        <div className="audio-player-placeholder">No audio loaded</div>
       </div>
     );
   }
@@ -93,6 +95,7 @@ export function AudioPlayer({ label, audioUrl, color = '#3b82f6' }: AudioPlayerP
       <div ref={containerRef} className="audio-player-waveform" />
       <div className="audio-player-controls">
         <button
+          type="button"
           onClick={togglePlay}
           disabled={!isReady}
           className="play-button"

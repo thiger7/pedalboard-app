@@ -14,7 +14,7 @@ export function FileSelector({
   if (isLoading) {
     return (
       <div className="file-selector">
-        <label>Input File:</label>
+        <span>Input File:</span>
         <span>Loading...</span>
       </div>
     );
@@ -23,7 +23,7 @@ export function FileSelector({
   if (files.length === 0) {
     return (
       <div className="file-selector">
-        <label>Input File:</label>
+        <span>Input File:</span>
         <span className="no-files">No audio files found in audio/input/</span>
       </div>
     );

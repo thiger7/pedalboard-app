@@ -1,25 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { AudioPlayer } from './components/AudioPlayer';
 import { EffectorBoard } from './components/EffectorBoard';
 import { FileSelector } from './components/FileSelector';
-import { AudioPlayer } from './components/AudioPlayer';
 import { useAudioProcessor, useInputFiles } from './hooks/useAudioProcessor';
-import { createInitialEffects, effectsToChain } from './utils/effectsMapping';
 import type { Effect } from './types/effects';
+import { createInitialEffects, effectsToChain } from './utils/effectsMapping';
 import './App.css';
 
 function App() {
   const [effects, setEffects] = useState<Effect[]>(createInitialEffects);
   const [selectedFile, setSelectedFile] = useState<string>('');
-  const [inputNormalizedUrl, setInputNormalizedUrl] = useState<string | null>(null);
-  const [outputNormalizedUrl, setOutputNormalizedUrl] = useState<string | null>(null);
+  const [inputNormalizedUrl, setInputNormalizedUrl] = useState<string | null>(
+    null,
+  );
+  const [outputNormalizedUrl, setOutputNormalizedUrl] = useState<string | null>(
+    null,
+  );
 
   const { files, isLoading: isLoadingFiles, fetchFiles } = useInputFiles();
-  const {
-    processAudio,
-    getNormalizedAudioUrl,
-    isProcessing,
-    error,
-  } = useAudioProcessor();
+  const { processAudio, getNormalizedAudioUrl, isProcessing, error } =
+    useAudioProcessor();
 
   useEffect(() => {
     fetchFiles();
@@ -71,6 +71,7 @@ function App() {
 
         <section className="process-section">
           <button
+            type="button"
             onClick={handleProcess}
             disabled={isProcessing || !selectedFile}
             className="process-button"
