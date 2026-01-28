@@ -1,9 +1,26 @@
 import json
+from dataclasses import dataclass
 
 from pedalboard import Pedalboard
 
 from lambda_function import handler
 from lib import EFFECT_MAPPING, build_effect_chain
+
+
+@dataclass
+class MockLambdaContext:
+    """テスト用のLambdaContextモック"""
+
+    function_name: str = "test-function"
+    function_version: str = "$LATEST"
+    invoked_function_arn: str = "arn:aws:lambda:ap-northeast-1:123456789012:function:test"
+    memory_limit_in_mb: int = 256
+    aws_request_id: str = "test-request-id"
+    log_group_name: str = "/aws/lambda/test"
+    log_stream_name: str = "test-stream"
+
+    def get_remaining_time_in_millis(self) -> int:
+        return 30000
 
 
 class TestEffectMapping:
@@ -104,7 +121,7 @@ class TestHandler:
             "isBase64Encoded": False,
         }
 
-        result = handler(event, None)
+        result = handler(event, MockLambdaContext())
         assert result["statusCode"] == 200
         body = json.loads(result["body"])
         assert body["status"] == "ok"
