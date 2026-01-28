@@ -1,25 +1,33 @@
-FROM python:3.13-slim
+## Base stage with dependencies
+FROM python:3.13-slim AS base
 
 WORKDIR /app
 
-# システム依存関係のインストール（pedalboardに必要）
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY lambda_function.py .
+
+## Development stage
+FROM base AS development
+
 RUN apt-get update && apt-get install -y \
     libsndfile1 \
     libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 依存関係のインストール
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY main.py .
 
-# アプリケーションコードのコピー
-COPY lambda_function.py .
-COPY backend/main.py .
-
-# 音声ファイル用ディレクトリを作成
 RUN mkdir -p /app/audio/input /app/audio/output
 
 EXPOSE 8000
 
-# ホットリロード有効でuvicornを起動
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+## Lambda stage
+FROM public.ecr.aws/lambda/python:3.13 AS lambda
+
+COPY --from=base /usr/local/lib/python3.13/site-packages /var/lang/lib/python3.13/site-packages
+COPY --from=base /app/lambda_function.py ${LAMBDA_TASK_ROOT}/
+
+CMD ["lambda_function.handler"]
