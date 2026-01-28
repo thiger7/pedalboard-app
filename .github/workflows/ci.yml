@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  client-quality:
+    name: Client quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Setup Biome
+        uses: biomejs/setup-biome@v2
+        with:
+          version: latest
+      - name: Run Biome
+        run: biome ci client
+
+  client-typecheck:
+    name: Client typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup & Install
+        uses: ./.github/actions/setup-bun-install
+      - name: Run typecheck
+        run: bun run typecheck
+        working-directory: client
+
+  client-test:
+    name: Client test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup & Install
+        uses: ./.github/actions/setup-bun-install
+      - name: Run tests
+        run: bun run vitest
+        working-directory: client
+
+  backend-quality:
+    name: Backend quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup & Install
+        uses: ./.github/actions/setup-python-install
+      - name: Run lint
+        run: make lint
+        working-directory: backend
+      - name: Run typecheck
+        run: make typecheck
+        working-directory: backend
+
+  backend-test:
+    name: Backend test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup & Install
+        uses: ./.github/actions/setup-python-install
+      - name: Run tests
+        run: make pytest
+        working-directory: backend
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup & Install
+        uses: ./.github/actions/setup-bun-install
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(bun pm ls @playwright/test | grep @playwright/test | sed 's/.*@//')" >> $GITHUB_OUTPUT
+        working-directory: client
+      - name: Cache Playwright browsers
+        uses: actions/cache@v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      - name: Install Playwright
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bun run e2e:install
+        working-directory: client
+      - name: Run E2E tests
+        run: bun run e2e
+        working-directory: client
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: client/playwright-report/
+          retention-days: 7

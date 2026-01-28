@@ -1,0 +1,20 @@
+name: "Setup Python and Install"
+description: "Setup Python with cache then install dependencies"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+        cache: "pip"
+        cache-dependency-path: backend/requirements.txt
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libsndfile1
+    - name: Install dependencies
+      shell: bash
+      run: pip install -r requirements.txt
+      working-directory: backend
