@@ -66,14 +66,45 @@ class TestBuildEffectChain:
 class TestHandler:
     """handler のテスト"""
 
-    def test_missing_input_path_returns_400(self):
-        """input_path がない場合は 400 を返す"""
-        result = handler({}, None)
-        assert result["statusCode"] == 400
-        body = json.loads(result["body"])
-        assert "error" in body
+    def test_handler_is_mangum_instance(self):
+        """handler が Mangum インスタンスである"""
+        from mangum import Mangum
 
-    def test_nonexistent_file_returns_500(self):
-        """存在しないファイルの場合は 500 を返す"""
-        result = handler({"input_path": "/nonexistent/file.wav", "effect_chain": []}, None)
-        assert result["statusCode"] == 500
+        assert isinstance(handler, Mangum)
+
+    def test_handler_with_api_gateway_event(self):
+        """API Gateway 形式のイベントを処理できる"""
+        event = {
+            "version": "2.0",
+            "routeKey": "GET /api/health",
+            "rawPath": "/api/health",
+            "rawQueryString": "",
+            "headers": {
+                "host": "localhost",
+                "content-type": "application/json",
+            },
+            "requestContext": {
+                "accountId": "123456789012",
+                "apiId": "api-id",
+                "domainName": "localhost",
+                "domainPrefix": "localhost",
+                "http": {
+                    "method": "GET",
+                    "path": "/api/health",
+                    "protocol": "HTTP/1.1",
+                    "sourceIp": "127.0.0.1",
+                    "userAgent": "test",
+                },
+                "requestId": "request-id",
+                "routeKey": "GET /api/health",
+                "stage": "$default",
+                "time": "01/Jan/2024:00:00:00 +0000",
+                "timeEpoch": 1704067200000,
+            },
+            "isBase64Encoded": False,
+        }
+
+        result = handler(event, None)
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["status"] == "ok"

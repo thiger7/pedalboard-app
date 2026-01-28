@@ -53,3 +53,5 @@ class S3ProcessResponse(BaseModel):
     output_key: str
     download_url: str
     effects_applied: list[str]
+    input_normalized_url: str
+    output_normalized_url: str

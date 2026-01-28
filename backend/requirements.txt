@@ -5,6 +5,7 @@ matplotlib
 fastapi
 uvicorn[standard]
 python-multipart
+mangum
 pytest
 httpx
 ruff

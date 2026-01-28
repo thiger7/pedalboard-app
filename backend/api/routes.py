@@ -1,6 +1,9 @@
+import os
 import uuid
+from pathlib import Path
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -147,7 +150,12 @@ async def get_normalized_audio(filename: str):
 
 def get_s3_client():
     """S3クライアントを取得"""
-    return boto3.client("s3")
+    return boto3.client(
+        "s3",
+        region_name="ap-northeast-1",
+        endpoint_url="https://s3.ap-northeast-1.amazonaws.com",
+        config=Config(signature_version="s3v4"),
+    )
 
 
 @router.post("/upload-url", response_model=UploadUrlResponse)
@@ -163,12 +171,12 @@ async def get_upload_url(request: UploadUrlRequest):
 
     try:
         s3 = get_s3_client()
+        # ContentType を署名に含めない（ブラウザのContent-Typeと不一致を防ぐ）
         upload_url = s3.generate_presigned_url(
             "put_object",
             Params={
                 "Bucket": S3_BUCKET,
                 "Key": s3_key,
-                "ContentType": request.content_type,
             },
             ExpiresIn=PRESIGNED_URL_EXPIRATION,
         )
@@ -209,10 +217,23 @@ async def process_s3_audio(request: S3ProcessRequest):
     with AudioFile(output_path, "w", samplerate, effected.shape[0]) as f:
         f.write(effected)
 
-    # S3にアップロード
+    # 表示用に正規化
+    normalized_id = uuid.uuid4().hex
+    input_norm_path = Path(f"/tmp/input_norm_{normalized_id}.wav")
+    output_norm_path = Path(f"/tmp/output_norm_{normalized_id}.wav")
+    normalize_audio_for_display(Path(input_path), input_norm_path)
+    normalize_audio_for_display(Path(output_path), output_norm_path)
+
+    # S3にアップロード（出力 + 正規化ファイル）
     output_key = f"{S3_OUTPUT_PREFIX}{output_id}.wav"
+    input_norm_key = f"{S3_OUTPUT_PREFIX}normalized/input_{normalized_id}.wav"
+    output_norm_key = f"{S3_OUTPUT_PREFIX}normalized/output_{normalized_id}.wav"
+
     try:
-        s3.upload_file(output_path, S3_BUCKET, output_key)
+        extra_args = {"ContentType": "audio/wav"}
+        s3.upload_file(output_path, S3_BUCKET, output_key, ExtraArgs=extra_args)
+        s3.upload_file(str(input_norm_path), S3_BUCKET, input_norm_key, ExtraArgs=extra_args)
+        s3.upload_file(str(output_norm_path), S3_BUCKET, output_norm_key, ExtraArgs=extra_args)
     except ClientError as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload output to S3: {e}")
 
@@ -222,17 +243,29 @@ async def process_s3_audio(request: S3ProcessRequest):
         Params={"Bucket": S3_BUCKET, "Key": output_key},
         ExpiresIn=PRESIGNED_URL_EXPIRATION,
     )
+    input_norm_url = s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": S3_BUCKET, "Key": input_norm_key},
+        ExpiresIn=PRESIGNED_URL_EXPIRATION,
+    )
+    output_norm_url = s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": S3_BUCKET, "Key": output_norm_key},
+        ExpiresIn=PRESIGNED_URL_EXPIRATION,
+    )
 
     # 一時ファイルを削除
-    import os
-
     os.remove(input_path)
     os.remove(output_path)
+    os.remove(input_norm_path)
+    os.remove(output_norm_path)
 
     return S3ProcessResponse(
         output_key=output_key,
         download_url=download_url,
         effects_applied=[e.name for e in request.effect_chain],
+        input_normalized_url=input_norm_url,
+        output_normalized_url=output_norm_url,
     )
 
 

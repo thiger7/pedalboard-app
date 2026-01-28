@@ -169,3 +169,48 @@ class TestS3Process:
         )
         assert response.status_code == 500
         assert "S3 bucket not configured" in response.json()["detail"]
+
+    def test_s3_process_returns_normalized_urls(self, client, tmp_path):
+        """S3 処理が正規化 URL を返す"""
+        import numpy as np
+        from pedalboard.io import AudioFile
+
+        # テスト用の音声ファイルを作成
+        test_audio = tmp_path / "test_input.wav"
+        sample_rate = 44100
+        audio_data = np.sin(2 * np.pi * 440 * np.arange(sample_rate) / sample_rate)
+        audio_data = audio_data.reshape(1, -1).astype(np.float32)
+        with AudioFile(str(test_audio), "w", sample_rate, 1) as f:
+            f.write(audio_data)
+
+        mock_s3 = MagicMock()
+        mock_s3.download_file.side_effect = lambda bucket, key, path: __import__(
+            "shutil"
+        ).copy(str(test_audio), path)
+        mock_s3.upload_file.return_value = None
+        mock_s3.generate_presigned_url.side_effect = lambda op, Params, ExpiresIn: (
+            f"https://s3.example.com/{Params['Key']}"
+        )
+
+        with (
+            patch("api.routes.S3_BUCKET", "test-bucket"),
+            patch("api.routes.get_s3_client", return_value=mock_s3),
+        ):
+            response = client.post(
+                "/api/s3-process",
+                json={
+                    "s3_key": "input/test.wav",
+                    "effect_chain": [{"name": "reverb", "params": {}}],
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "output_key" in data
+            assert "download_url" in data
+            assert "effects_applied" in data
+            assert "input_normalized_url" in data
+            assert "output_normalized_url" in data
+            assert "reverb" in data["effects_applied"]
+            assert "normalized" in data["input_normalized_url"]
+            assert "normalized" in data["output_normalized_url"]
