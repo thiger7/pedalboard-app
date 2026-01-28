@@ -2,7 +2,8 @@ import json
 
 from pedalboard import Pedalboard
 
-from lambda_function import EFFECT_MAPPING, build_effect_chain, handler
+from lambda_function import handler
+from lib import EFFECT_MAPPING, build_effect_chain
 
 
 class TestEffectMapping:
@@ -37,26 +38,28 @@ class TestBuildEffectChain:
 
     def test_multiple_effects(self):
         """複数エフェクトの構築"""
-        board = build_effect_chain([
-            {"name": "Blues Driver"},
-            {"name": "Chorus"},
-        ])
+        board = build_effect_chain(
+            [
+                {"name": "Blues Driver"},
+                {"name": "Chorus"},
+            ]
+        )
         assert len(board) == 2
 
     def test_custom_params_override_defaults(self):
         """カスタムパラメータがデフォルトを上書きする"""
-        board = build_effect_chain([
-            {"name": "Booster_Preamp", "params": {"gain_db": 12}}
-        ])
+        board = build_effect_chain([{"name": "Booster_Preamp", "params": {"gain_db": 12}}])
         assert len(board) == 1
         assert board[0].gain_db == 12
 
     def test_unknown_effect_is_skipped(self):
         """未知のエフェクトはスキップされる"""
-        board = build_effect_chain([
-            {"name": "Unknown Effect"},
-            {"name": "Chorus"},
-        ])
+        board = build_effect_chain(
+            [
+                {"name": "Unknown Effect"},
+                {"name": "Chorus"},
+            ]
+        )
         assert len(board) == 1
 
 
@@ -72,8 +75,5 @@ class TestHandler:
 
     def test_nonexistent_file_returns_500(self):
         """存在しないファイルの場合は 500 を返す"""
-        result = handler({
-            "input_path": "/nonexistent/file.wav",
-            "effect_chain": []
-        }, None)
+        result = handler({"input_path": "/nonexistent/file.wav", "effect_chain": []}, None)
         assert result["statusCode"] == 500
