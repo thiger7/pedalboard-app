@@ -21,6 +21,7 @@ from .config import (
     S3_BUCKET,
     S3_INPUT_PREFIX,
     S3_OUTPUT_PREFIX,
+    S3_REGION,
 )
 from .schemas import (
     ProcessRequest,
@@ -152,8 +153,8 @@ def get_s3_client():
     """S3クライアントを取得"""
     return boto3.client(
         "s3",
-        region_name="ap-northeast-1",
-        endpoint_url="https://s3.ap-northeast-1.amazonaws.com",
+        region_name=S3_REGION,
+        endpoint_url=f"https://s3.{S3_REGION}.amazonaws.com",
         config=Config(signature_version="s3v4"),
     )
 

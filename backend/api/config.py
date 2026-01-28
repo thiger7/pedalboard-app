@@ -7,6 +7,7 @@ AUDIO_NORMALIZED_DIR = AUDIO_OUTPUT_DIR / "normalized"
 
 # S3 settings (for Lambda deployment)
 S3_BUCKET = os.environ.get("AUDIO_BUCKET", "")
+S3_REGION = os.environ.get("AWS_REGION", "ap-northeast-1")
 S3_INPUT_PREFIX = "input/"
 S3_OUTPUT_PREFIX = "output/"
 PRESIGNED_URL_EXPIRATION = 3600  # 1 hour
