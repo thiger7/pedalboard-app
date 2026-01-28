@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { AudioPlayer } from './components/AudioPlayer';
-import { EffectorBoard } from './components/EffectorBoard';
-import { FileSelector } from './components/FileSelector';
-import { useAudioProcessor, useInputFiles } from './hooks/useAudioProcessor';
-import type { Effect } from './types/effects';
-import { createInitialEffects, effectsToChain } from './utils/effectsMapping';
+import { AudioPlayer } from '../components/AudioPlayer';
+import { EffectorBoard } from '../components/EffectorBoard';
+import { FileSelector } from '../components/FileSelector';
+import { useAudioProcessor, useInputFiles } from '../hooks/useAudioProcessor';
+import type { Effect } from '../types/effects';
+import { createInitialEffects, effectsToChain } from '../utils/effectsMapping';
 import './App.css';
 
 function App() {
