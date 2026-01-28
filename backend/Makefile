@@ -1,4 +1,4 @@
-.PHONY: install dev lint format typecheck pytest pytest-watch test
+.PHONY: install dev lint format typecheck pytest pytest-watch test audit
 
 install:
 	pip install -r requirements.txt
@@ -22,3 +22,6 @@ pytest-watch:
 	python -m pytest --watch
 
 test: typecheck lint pytest
+
+audit:
+	pip-audit
