@@ -27,6 +27,12 @@ pnpm-debug.log*
 vitest.config.ts
 biome.jsonc
 
+# Python cache
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+
 # Documents
 .git
 .gitignore
