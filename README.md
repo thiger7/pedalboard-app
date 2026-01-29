@@ -6,6 +6,8 @@
 
 ブラウザ上でギターエフェクターを並べ替え、音声ファイルにエフェクトを適用できるデモアプリです。
 
+![Application Screenshot](docs/application_image.png)
+
 ## エフェクト一覧
 
 | カテゴリ | エフェクト |
@@ -42,7 +44,7 @@
 
 ## AWS アーキテクチャ
 
-![AWS Architecture](infra/architecture.png)
+<img src="infra/architecture.png" alt="AWS Architecture" width="600">
 
 - **CloudFront** - 統一エントリーポイント
   - `/*` → S3 (Frontend) へルーティング
