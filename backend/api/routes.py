@@ -1,6 +1,7 @@
 import os
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 import boto3
 from botocore.config import Config
@@ -82,8 +83,10 @@ async def process_audio(request: ProcessRequest):
         for old_file in AUDIO_NORMALIZED_DIR.glob("*.wav"):
             old_file.unlink()
 
-    # 出力ファイル名を生成
-    output_filename = f"{uuid.uuid4().hex}.wav"
+    # 出力ファイル名を生成（元のファイル名 + ランダム文字列）
+    base_name = Path(request.input_file).stem
+    short_id = uuid.uuid4().hex[:8]
+    output_filename = f"{base_name}_{short_id}.wav"
     output_path = AUDIO_OUTPUT_DIR / output_filename
     AUDIO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -238,10 +241,22 @@ async def process_s3_audio(request: S3ProcessRequest):
     except ClientError as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload output to S3: {e}")
 
-    # ダウンロード用Presigned URLを生成
+    # ダウンロード用Presigned URLを生成（元のファイル名 + ランダム文字列）
+    if request.original_filename:
+        base_name = Path(request.original_filename).stem
+    else:
+        base_name = "output"
+    short_id = output_id[:8]
+    download_filename = f"{base_name}_{short_id}.wav"
+    # RFC 5987 形式で UTF-8 ファイル名をエンコード
+    encoded_filename = quote(download_filename)
     download_url = s3.generate_presigned_url(
         "get_object",
-        Params={"Bucket": S3_BUCKET, "Key": output_key},
+        Params={
+            "Bucket": S3_BUCKET,
+            "Key": output_key,
+            "ResponseContentDisposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+        },
         ExpiresIn=PRESIGNED_URL_EXPIRATION,
     )
     input_norm_url = s3.generate_presigned_url(

@@ -82,6 +82,95 @@ class TestInputFiles:
         assert isinstance(data["files"], list)
 
 
+class TestLocalProcess:
+    """ローカル音声処理のテスト"""
+
+    def _create_test_audio(self, path):
+        """テスト用の音声ファイルを作成"""
+        import numpy as np
+        from pedalboard.io import AudioFile
+
+        sample_rate = 44100
+        audio_data = np.sin(2 * np.pi * 440 * np.arange(sample_rate) / sample_rate)
+        audio_data = audio_data.reshape(1, -1).astype(np.float32)
+        with AudioFile(str(path), "w", sample_rate, 1) as f:
+            f.write(audio_data)
+
+    def test_process_output_filename_uses_original_name(self, client, tmp_path):
+        """ローカル処理で出力ファイル名に元のファイル名が使われる"""
+        # テスト用ディレクトリを作成
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        normalized_dir = tmp_path / "normalized"
+        input_dir.mkdir()
+        output_dir.mkdir()
+        normalized_dir.mkdir()
+
+        # テスト用の音声ファイルを作成
+        test_audio = input_dir / "my_song.wav"
+        self._create_test_audio(test_audio)
+
+        with (
+            patch("api.routes.AUDIO_INPUT_DIR", input_dir),
+            patch("api.routes.AUDIO_OUTPUT_DIR", output_dir),
+            patch("api.routes.AUDIO_NORMALIZED_DIR", normalized_dir),
+        ):
+            response = client.post(
+                "/api/process",
+                json={
+                    "input_file": "my_song.wav",
+                    "effect_chain": [{"name": "reverb", "params": {}}],
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            # 出力ファイル名が「元のファイル名_ランダム文字列.wav」形式
+            assert data["output_file"].startswith("my_song_")
+            assert data["output_file"].endswith(".wav")
+            # ランダム部分が8文字
+            name_without_ext = data["output_file"][:-4]  # .wav を除去
+            random_part = name_without_ext.split("_")[-1]
+            assert len(random_part) == 8
+
+    def test_process_output_file_is_downloadable(self, client, tmp_path):
+        """ローカル処理後に出力ファイルがダウンロードできる"""
+        # テスト用ディレクトリを作成
+        input_dir = tmp_path / "input"
+        output_dir = tmp_path / "output"
+        normalized_dir = tmp_path / "normalized"
+        input_dir.mkdir()
+        output_dir.mkdir()
+        normalized_dir.mkdir()
+
+        # テスト用の音声ファイルを作成
+        test_audio = input_dir / "my_song.wav"
+        self._create_test_audio(test_audio)
+
+        with (
+            patch("api.routes.AUDIO_INPUT_DIR", input_dir),
+            patch("api.routes.AUDIO_OUTPUT_DIR", output_dir),
+            patch("api.routes.AUDIO_NORMALIZED_DIR", normalized_dir),
+        ):
+            # 処理を実行
+            process_response = client.post(
+                "/api/process",
+                json={
+                    "input_file": "my_song.wav",
+                    "effect_chain": [{"name": "reverb", "params": {}}],
+                },
+            )
+            assert process_response.status_code == 200
+            data = process_response.json()
+
+            # ダウンロード URL からファイルを取得
+            download_response = client.get(f"/api/audio/{data['output_file']}")
+            assert download_response.status_code == 200
+            assert download_response.headers["content-type"] == "audio/wav"
+            # ファイルサイズが0より大きい
+            assert len(download_response.content) > 0
+
+
 class TestAudioEndpoints:
     """音声ファイルエンドポイントのテスト"""
 
@@ -184,9 +273,9 @@ class TestS3Process:
             f.write(audio_data)
 
         mock_s3 = MagicMock()
-        mock_s3.download_file.side_effect = lambda bucket, key, path: __import__(
-            "shutil"
-        ).copy(str(test_audio), path)
+        mock_s3.download_file.side_effect = lambda bucket, key, path: __import__("shutil").copy(
+            str(test_audio), path
+        )
         mock_s3.upload_file.return_value = None
         mock_s3.generate_presigned_url.side_effect = lambda op, Params, ExpiresIn: (
             f"https://s3.example.com/{Params['Key']}"
@@ -214,3 +303,98 @@ class TestS3Process:
             assert "reverb" in data["effects_applied"]
             assert "normalized" in data["input_normalized_url"]
             assert "normalized" in data["output_normalized_url"]
+
+    def test_s3_process_uses_original_filename_in_download(self, client, tmp_path):
+        """S3 処理でダウンロードファイル名に元のファイル名が使われる"""
+        import numpy as np
+        from pedalboard.io import AudioFile
+
+        # テスト用の音声ファイルを作成
+        test_audio = tmp_path / "test_input.wav"
+        sample_rate = 44100
+        audio_data = np.sin(2 * np.pi * 440 * np.arange(sample_rate) / sample_rate)
+        audio_data = audio_data.reshape(1, -1).astype(np.float32)
+        with AudioFile(str(test_audio), "w", sample_rate, 1) as f:
+            f.write(audio_data)
+
+        captured_params = {}
+
+        def capture_presigned_url(op, Params, ExpiresIn):
+            if "ResponseContentDisposition" in Params:
+                captured_params["disposition"] = Params["ResponseContentDisposition"]
+            return f"https://s3.example.com/{Params['Key']}"
+
+        mock_s3 = MagicMock()
+        mock_s3.download_file.side_effect = lambda bucket, key, path: __import__("shutil").copy(
+            str(test_audio), path
+        )
+        mock_s3.upload_file.return_value = None
+        mock_s3.generate_presigned_url.side_effect = capture_presigned_url
+
+        with (
+            patch("api.routes.S3_BUCKET", "test-bucket"),
+            patch("api.routes.get_s3_client", return_value=mock_s3),
+        ):
+            response = client.post(
+                "/api/s3-process",
+                json={
+                    "s3_key": "input/test.wav",
+                    "effect_chain": [{"name": "reverb", "params": {}}],
+                    "original_filename": "my_guitar.wav",
+                },
+            )
+
+            assert response.status_code == 200
+            # ダウンロードファイル名に元のファイル名が含まれる（RFC 5987 形式）
+            assert "disposition" in captured_params
+            assert "filename*=UTF-8''" in captured_params["disposition"]
+            assert "my_guitar_" in captured_params["disposition"]
+            assert ".wav" in captured_params["disposition"]
+
+    def test_s3_process_encodes_japanese_filename(self, client, tmp_path):
+        """S3 処理で日本語ファイル名が正しくエンコードされる"""
+        import numpy as np
+        from pedalboard.io import AudioFile
+
+        # テスト用の音声ファイルを作成
+        test_audio = tmp_path / "test_input.wav"
+        sample_rate = 44100
+        audio_data = np.sin(2 * np.pi * 440 * np.arange(sample_rate) / sample_rate)
+        audio_data = audio_data.reshape(1, -1).astype(np.float32)
+        with AudioFile(str(test_audio), "w", sample_rate, 1) as f:
+            f.write(audio_data)
+
+        captured_params = {}
+
+        def capture_presigned_url(op, Params, ExpiresIn):
+            if "ResponseContentDisposition" in Params:
+                captured_params["disposition"] = Params["ResponseContentDisposition"]
+            return f"https://s3.example.com/{Params['Key']}"
+
+        mock_s3 = MagicMock()
+        mock_s3.download_file.side_effect = lambda bucket, key, path: __import__("shutil").copy(
+            str(test_audio), path
+        )
+        mock_s3.upload_file.return_value = None
+        mock_s3.generate_presigned_url.side_effect = capture_presigned_url
+
+        with (
+            patch("api.routes.S3_BUCKET", "test-bucket"),
+            patch("api.routes.get_s3_client", return_value=mock_s3),
+        ):
+            response = client.post(
+                "/api/s3-process",
+                json={
+                    "s3_key": "input/test.wav",
+                    "effect_chain": [{"name": "reverb", "params": {}}],
+                    "original_filename": "単音.wav",
+                },
+            )
+
+            assert response.status_code == 200
+            # 日本語ファイル名が URL エンコードされている
+            assert "disposition" in captured_params
+            assert "filename*=UTF-8''" in captured_params["disposition"]
+            # 「単音」は URL エンコードされるので直接含まれない
+            assert "%E5%8D%98%E9%9F%B3" in captured_params["disposition"]  # 「単音」のURLエンコード
+            assert ".wav" in captured_params["disposition"]

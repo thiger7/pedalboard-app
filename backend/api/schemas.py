@@ -45,6 +45,7 @@ class S3ProcessRequest(BaseModel):
 
     s3_key: str
     effect_chain: list[EffectConfig]
+    original_filename: str | None = None
 
 
 class S3ProcessResponse(BaseModel):
