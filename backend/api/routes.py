@@ -172,12 +172,12 @@ async def get_upload_url(request: UploadUrlRequest):
 
     try:
         s3 = get_s3_client()
-        # ContentType を署名に含めない（ブラウザのContent-Typeと不一致を防ぐ）
         upload_url = s3.generate_presigned_url(
             "put_object",
             Params={
                 "Bucket": S3_BUCKET,
                 "Key": s3_key,
+                "ContentType": request.content_type,
             },
             ExpiresIn=PRESIGNED_URL_EXPIRATION,
         )
