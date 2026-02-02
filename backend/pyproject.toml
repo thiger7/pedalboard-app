@@ -6,7 +6,7 @@ target-version = "py313"
 select = ["E", "F", "I", "W"]
 
 [tool.pyright]
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 typeCheckingMode = "basic"
 reportPrivateImportUsage = false
 reportAttributeAccessIssue = false
