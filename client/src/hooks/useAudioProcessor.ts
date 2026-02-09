@@ -4,6 +4,7 @@ import type {
   EffectConfig,
   ProcessRequest,
   ProcessResponse,
+  S3ProcessAsyncResponse,
   S3ProcessResponse,
   UploadUrlResponse,
 } from '../types/effects';
@@ -88,7 +89,7 @@ export function useAudioProcessor() {
 
       try {
         const response = await axios.post<S3ProcessResponse>(
-          `${API_BASE_URL}/api/s3-process`,
+          `${API_BASE_URL}/api/s3-process-sync`,
           {
             s3_key: s3Key,
             effect_chain: effectChain,
@@ -96,6 +97,38 @@ export function useAudioProcessor() {
           },
         );
         setS3Result(response.data);
+        return response.data;
+      } catch (err) {
+        const message = axios.isAxiosError(err)
+          ? err.response?.data?.detail || err.message
+          : 'Unknown error occurred';
+        setError(message);
+        return null;
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [],
+  );
+
+  const processS3AudioAsync = useCallback(
+    async (
+      s3Key: string,
+      effectChain: EffectConfig[],
+      originalFilename?: string,
+    ): Promise<S3ProcessAsyncResponse | null> => {
+      setIsProcessing(true);
+      setError(null);
+
+      try {
+        const response = await axios.post<S3ProcessAsyncResponse>(
+          `${API_BASE_URL}/api/s3-process`,
+          {
+            s3_key: s3Key,
+            effect_chain: effectChain,
+            original_filename: originalFilename,
+          },
+        );
         return response.data;
       } catch (err) {
         const message = axios.isAxiosError(err)
@@ -125,6 +158,7 @@ export function useAudioProcessor() {
   return {
     processAudio,
     processS3Audio,
+    processS3AudioAsync,
     getAudioUrl,
     getInputAudioUrl,
     getNormalizedAudioUrl,

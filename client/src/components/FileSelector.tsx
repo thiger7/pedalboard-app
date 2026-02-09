@@ -1,4 +1,5 @@
-import type { ChangeEvent } from 'react';
+import { type ChangeEvent, useRef } from 'react';
+import './FileSelector.css';
 
 // Local mode: select from existing files
 interface LocalFileSelectorProps {
@@ -20,6 +21,8 @@ interface S3FileSelectorProps {
 type FileSelectorProps = LocalFileSelectorProps | S3FileSelectorProps;
 
 export function FileSelector(props: FileSelectorProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   if (props.mode === 's3') {
     const { onFileSelect, uploadedFileName, isUploading } = props;
 
@@ -30,20 +33,34 @@ export function FileSelector(props: FileSelectorProps) {
       }
     };
 
+    const handleButtonClick = () => {
+      fileInputRef.current?.click();
+    };
+
     return (
       <div className="file-selector">
         <label htmlFor="input-file">Input File:</label>
         <input
+          ref={fileInputRef}
           type="file"
           id="input-file"
           accept="audio/*,.wav,.mp3,.flac,.ogg"
           onChange={handleFileChange}
           disabled={isUploading}
+          className="file-input-hidden"
         />
+        <button
+          type="button"
+          onClick={handleButtonClick}
+          disabled={isUploading}
+          className="file-select-button"
+        >
+          Select File
+        </button>
+        <span className="file-name-display">
+          {uploadedFileName ?? 'No File Selected'}
+        </span>
         {isUploading && <span className="upload-status">Uploading...</span>}
-        {uploadedFileName && (
-          <span className="upload-status uploaded">{uploadedFileName}</span>
-        )}
       </div>
     );
   }

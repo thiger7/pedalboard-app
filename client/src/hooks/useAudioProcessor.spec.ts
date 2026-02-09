@@ -258,6 +258,74 @@ describe('processS3Audio', () => {
   });
 });
 
+describe('processS3AudioAsync', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('非同期処理でジョブIDを返す', async () => {
+    const mockResponseData = {
+      job_id: 'abc123',
+      status: 'pending',
+    };
+    (axios.post as Mock).mockResolvedValueOnce({ data: mockResponseData });
+
+    const { result } = renderHook(() => useAudioProcessor());
+
+    await act(async () => {
+      const response = await result.current.processS3AudioAsync(
+        'input/test.wav',
+        [{ name: 'reverb' }],
+      );
+
+      expect(response).toEqual(mockResponseData);
+      expect(response?.job_id).toBe('abc123');
+      expect(response?.status).toBe('pending');
+    });
+  });
+
+  it('/api/s3-process エンドポイントを呼び出す', async () => {
+    const mockResponseData = { job_id: 'abc123', status: 'pending' };
+    (axios.post as Mock).mockResolvedValueOnce({ data: mockResponseData });
+
+    const { result } = renderHook(() => useAudioProcessor());
+
+    await act(async () => {
+      await result.current.processS3AudioAsync(
+        'input/test.wav',
+        [{ name: 'reverb' }],
+        'guitar.wav',
+      );
+    });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.stringContaining('/api/s3-process'),
+      {
+        s3_key: 'input/test.wav',
+        effect_chain: [{ name: 'reverb' }],
+        original_filename: 'guitar.wav',
+      },
+    );
+  });
+
+  it('エラー時にnullを返しエラーメッセージを設定する', async () => {
+    (axios.post as Mock).mockRejectedValueOnce(new Error('Network Error'));
+    (axios.isAxiosError as unknown as Mock).mockReturnValue(false);
+
+    const { result } = renderHook(() => useAudioProcessor());
+
+    await act(async () => {
+      const response = await result.current.processS3AudioAsync(
+        'input/test.wav',
+        [],
+      );
+      expect(response).toBeNull();
+    });
+
+    expect(result.current.error).toBe('Unknown error occurred');
+  });
+});
+
 describe('useS3Upload', () => {
   beforeEach(() => {
     vi.clearAllMocks();

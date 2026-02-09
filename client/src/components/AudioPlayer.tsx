@@ -35,6 +35,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const handleReady = useCallback((ws: WaveSurfer) => {
       wavesurferRef.current = ws;
       setIsReady(true);
+      setIsPlaying(false);
+      setCurrentTime(0);
       setDuration(ws.getDuration());
     }, []);
 

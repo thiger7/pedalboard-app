@@ -50,3 +50,27 @@ export interface S3ProcessResponse {
   input_normalized_url: string;
   output_normalized_url: string;
 }
+
+// Async processing types
+export interface S3ProcessAsyncResponse {
+  job_id: string;
+  status: string;
+}
+
+export interface JobResponse {
+  job_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  effect_chain: EffectConfig[];
+  original_filename?: string;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+  error_message?: string;
+  download_url?: string;
+  input_normalized_url?: string;
+  output_normalized_url?: string;
+}
+
+export interface BatchJobsResponse {
+  jobs: JobResponse[];
+}

@@ -2,12 +2,14 @@ import { useRef, useState } from 'react';
 import { AudioPlayer, type AudioPlayerHandle } from '../components/AudioPlayer';
 import { EffectorBoard } from '../components/EffectorBoard';
 import { FileSelector } from '../components/FileSelector';
+import { HistoryPanel } from '../components/HistoryPanel';
 import {
   useAppMode,
   useAudioProcessor,
   useS3Upload,
 } from '../hooks/useAudioProcessor';
-import type { Effect } from '../types/effects';
+import { useJobHistory } from '../hooks/useJobHistory';
+import type { Effect, JobResponse } from '../types/effects';
 import { createInitialEffects, effectsToChain } from '../utils/effectsMapping';
 import './App.css';
 
@@ -18,6 +20,8 @@ function App() {
   const [inputAudioUrl, setInputAudioUrl] = useState<string | null>(null);
   const [outputAudioUrl, setOutputAudioUrl] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [outputFileName, setOutputFileName] = useState<string | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const inputPlayerRef = useRef<AudioPlayerHandle>(null);
   const outputPlayerRef = useRef<AudioPlayerHandle>(null);
 
@@ -25,12 +29,24 @@ function App() {
   const {
     processAudio,
     processS3Audio,
+    processS3AudioAsync,
     getAudioUrl,
     getNormalizedAudioUrl,
     isProcessing,
     error,
   } = useAudioProcessor();
   const { uploadFile, isUploading, uploadedKey, uploadError } = useS3Upload();
+  const {
+    jobs,
+    isLoading: isHistoryLoading,
+    recentlyCompletedIds,
+    addJobId,
+    clearHistory,
+    clearHighlight,
+    fetchJobs,
+    pollJobUntilComplete,
+  } = useJobHistory();
+  const historySectionRef = useRef<HTMLElement>(null);
 
   const handleFileUpload = async (file: File) => {
     setUploadedFileName(file.name);
@@ -38,11 +54,6 @@ function App() {
   };
 
   const handleProcess = async () => {
-    // 再生中のプレイヤーを停止
-    inputPlayerRef.current?.pause();
-    outputPlayerRef.current?.pause();
-    setDownloadUrl(null);
-
     const enabledEffects = effects.filter((e) => e.enabled);
     if (enabledEffects.length === 0) {
       alert('Please enable at least one effect');
@@ -50,21 +61,48 @@ function App() {
     }
 
     if (mode === 's3') {
-      // S3 mode
+      // S3 mode - 非同期処理
       if (!uploadedKey) {
         alert('Please upload an audio file first');
         return;
       }
 
-      const result = await processS3Audio(
+      // 非同期処理を試みる
+      const asyncResult = await processS3AudioAsync(
         uploadedKey,
         effectsToChain(effects),
         uploadedFileName ?? undefined,
       );
-      if (result) {
-        setInputAudioUrl(result.input_normalized_url);
-        setOutputAudioUrl(result.output_normalized_url);
-        setDownloadUrl(result.download_url);
+
+      if (asyncResult) {
+        // ジョブIDを履歴に追加して即座に表示
+        addJobId(asyncResult.job_id);
+        fetchJobs();
+
+        // バックグラウンドでポーリング（UIはブロックしない、ボタンはすぐに有効化）
+        pollJobUntilComplete(asyncResult.job_id).then(() => {
+          // 完了時に履歴を更新
+          fetchJobs();
+          // History セクションへスクロール
+          historySectionRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
+        });
+      } else {
+        // 非同期が利用できない場合は同期処理にフォールバック
+        const result = await processS3Audio(
+          uploadedKey,
+          effectsToChain(effects),
+          uploadedFileName ?? undefined,
+        );
+        if (result) {
+          setInputAudioUrl(result.input_normalized_url);
+          setOutputAudioUrl(result.output_normalized_url);
+          setDownloadUrl(result.download_url);
+          setOutputFileName(uploadedFileName);
+          setSelectedJobId(null);
+        }
       }
     } else {
       // Local mode
@@ -82,7 +120,30 @@ function App() {
         setInputAudioUrl(getNormalizedAudioUrl(result.input_normalized));
         setOutputAudioUrl(getNormalizedAudioUrl(result.output_normalized));
         setDownloadUrl(getAudioUrl(result.output_file));
+        setOutputFileName(selectedFile);
+        setSelectedJobId(null);
       }
+    }
+  };
+
+  const handleSelectJob = (job: JobResponse) => {
+    if (job.status === 'completed') {
+      const newInputUrl = job.input_normalized_url ?? null;
+      const newOutputUrl = job.output_normalized_url ?? null;
+
+      // 同じ音声なら何もしない
+      if (newInputUrl === inputAudioUrl && newOutputUrl === outputAudioUrl) {
+        return;
+      }
+
+      // 再生中のプレイヤーを停止
+      inputPlayerRef.current?.pause();
+      outputPlayerRef.current?.pause();
+      setInputAudioUrl(newInputUrl);
+      setOutputAudioUrl(newOutputUrl);
+      setDownloadUrl(job.download_url ?? null);
+      setOutputFileName(job.original_filename ?? null);
+      setSelectedJobId(job.job_id);
     }
   };
 
@@ -136,7 +197,7 @@ function App() {
             disabled={isProcessing || !isReady}
             className="process-button"
           >
-            {isProcessing ? 'Applying...' : 'Apply Effects'}
+            {isProcessing ? 'Submitting...' : 'Apply Effects'}
           </button>
           {error && <p className="error-message">{error}</p>}
         </section>
@@ -170,7 +231,29 @@ function App() {
               <a href={downloadUrl} download className="download-link">
                 Download
               </a>
+              <span className="output-filename">{outputFileName ?? ''}</span>
             </div>
+          </section>
+        )}
+
+        {mode === 's3' && jobs.length > 0 && (
+          <section
+            className="history-section-container"
+            ref={historySectionRef}
+          >
+            <div className="history-section-header">
+              <h2>History</h2>
+            </div>
+            <HistoryPanel
+              jobs={jobs}
+              isLoading={isHistoryLoading}
+              recentlyCompletedIds={recentlyCompletedIds}
+              selectedJobId={selectedJobId}
+              onRefresh={fetchJobs}
+              onClear={clearHistory}
+              onSelectJob={handleSelectJob}
+              onClearHighlight={clearHighlight}
+            />
           </section>
         )}
       </main>

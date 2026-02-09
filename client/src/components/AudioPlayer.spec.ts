@@ -1,15 +1,36 @@
 import { render, screen } from '@testing-library/react';
-import { createElement } from 'react';
+import userEvent from '@testing-library/user-event';
+import { createElement, createRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AudioPlayer } from './AudioPlayer';
+import { AudioPlayer, type AudioPlayerHandle } from './AudioPlayer';
+
+// wavesurfer のモックインスタンス
+const mockWavesurfer = {
+  playPause: vi.fn(),
+  pause: vi.fn(),
+  getDuration: vi.fn(() => 120),
+  getCurrentTime: vi.fn(() => 0),
+};
 
 // @wavesurfer/react のモック
 vi.mock('@wavesurfer/react', () => ({
-  default: vi.fn(({ url }: { url: string | null }) => {
-    // WavesurferPlayer コンポーネントのモック
-    if (!url) return null;
-    return createElement('div', { 'data-testid': 'wavesurfer-player' });
-  }),
+  default: vi.fn(
+    ({
+      url,
+      onReady,
+    }: {
+      url: string | null;
+      onReady?: (ws: typeof mockWavesurfer) => void;
+    }) => {
+      // WavesurferPlayer コンポーネントのモック
+      if (!url) return null;
+      // onReady を次のティックで呼び出す
+      if (onReady) {
+        setTimeout(() => onReady(mockWavesurfer), 0);
+      }
+      return createElement('div', { 'data-testid': 'wavesurfer-player' });
+    },
+  ),
 }));
 
 describe('AudioPlayer', () => {
@@ -77,5 +98,45 @@ describe('AudioPlayer', () => {
       }),
     );
     expect(container.querySelector('.audio-player')).toBeInTheDocument();
+  });
+
+  it('Play ボタンクリックで playPause が呼ばれる', async () => {
+    const user = userEvent.setup();
+    render(
+      createElement(AudioPlayer, {
+        label: 'Input',
+        audioUrl: 'http://example.com/audio.wav',
+      }),
+    );
+
+    // onReady が呼ばれるまで待つ
+    await vi.waitFor(() => {
+      expect(screen.getByRole('button', { name: /play/i })).not.toBeDisabled();
+    });
+
+    const playButton = screen.getByRole('button', { name: /play/i });
+    await user.click(playButton);
+
+    expect(mockWavesurfer.playPause).toHaveBeenCalled();
+  });
+
+  it('ref 経由で pause を呼べる', async () => {
+    const ref = createRef<AudioPlayerHandle>();
+    render(
+      createElement(AudioPlayer, {
+        ref,
+        label: 'Input',
+        audioUrl: 'http://example.com/audio.wav',
+      }),
+    );
+
+    // onReady が呼ばれてボタンが有効になるまで待つ
+    await vi.waitFor(() => {
+      expect(screen.getByRole('button', { name: /play/i })).not.toBeDisabled();
+    });
+
+    ref.current?.pause();
+
+    expect(mockWavesurfer.pause).toHaveBeenCalled();
   });
 });
