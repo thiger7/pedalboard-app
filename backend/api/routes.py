@@ -14,6 +14,7 @@ from lib import EFFECT_MAPPING, normalize_audio_for_display
 from lib.effects import build_effect_chain
 
 from .config import (
+    ASYNC_PROCESSING_ENABLED,
     AUDIO_INPUT_DIR,
     AUDIO_NORMALIZED_DIR,
     AUDIO_OUTPUT_DIR,
@@ -25,8 +26,12 @@ from .config import (
     S3_REGION,
 )
 from .schemas import (
+    BatchJobsRequest,
+    BatchJobsResponse,
+    JobResponse,
     ProcessRequest,
     ProcessResponse,
+    S3ProcessAsyncResponse,
     S3ProcessRequest,
     S3ProcessResponse,
     UploadUrlRequest,
@@ -189,9 +194,40 @@ async def get_upload_url(request: UploadUrlRequest):
         raise HTTPException(status_code=500, detail=f"Failed to generate upload URL: {e}")
 
 
-@router.post("/s3-process", response_model=S3ProcessResponse)
+@router.post("/s3-process", response_model=S3ProcessAsyncResponse)
 async def process_s3_audio(request: S3ProcessRequest):
-    """S3上の音声ファイルを処理"""
+    """S3上の音声ファイルを非同期処理"""
+    if not S3_BUCKET:
+        raise HTTPException(status_code=500, detail="S3 bucket not configured")
+
+    if not ASYNC_PROCESSING_ENABLED:
+        raise HTTPException(status_code=500, detail="Async processing not configured")
+
+    from lib.job_service import create_job
+    from lib.sqs import send_job_message
+
+    input_key = request.s3_key
+    effect_chain = [{"name": e.name, "params": e.params or {}} for e in request.effect_chain]
+
+    # ジョブを作成
+    try:
+        job = create_job(input_key, effect_chain, request.original_filename)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create job: {e}")
+
+    # SQSにメッセージを送信
+    if not send_job_message(job["job_id"], input_key, effect_chain, request.original_filename):
+        raise HTTPException(status_code=500, detail="Failed to queue job")
+
+    return S3ProcessAsyncResponse(
+        job_id=job["job_id"],
+        status=job["status"],
+    )
+
+
+@router.post("/s3-process-sync", response_model=S3ProcessResponse)
+async def process_s3_audio_sync(request: S3ProcessRequest):
+    """S3上の音声ファイルを同期処理（後方互換用）"""
     if not S3_BUCKET:
         raise HTTPException(status_code=500, detail="S3 bucket not configured")
 
@@ -301,3 +337,141 @@ async def get_download_url(s3_key: str):
         return {"download_url": download_url}
     except ClientError as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate download URL: {e}")
+
+
+# ============================================
+# Job Management Endpoints
+# ============================================
+
+
+def _generate_presigned_urls_for_job(s3, job: dict) -> dict:
+    """ジョブの出力ファイル用Presigned URLを生成"""
+    urls = {
+        "download_url": None,
+        "input_normalized_url": None,
+        "output_normalized_url": None,
+    }
+
+    if job.get("status") != "completed" or not job.get("output_key"):
+        return urls
+
+    output_key = job["output_key"]
+
+    # ダウンロードURL
+    original_filename = job.get("original_filename", "output")
+    base_name = Path(original_filename).stem if original_filename else "output"
+    short_id = job["job_id"][:8]
+    download_filename = f"{base_name}_{short_id}.wav"
+    encoded_filename = quote(download_filename)
+
+    urls["download_url"] = s3.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": S3_BUCKET,
+            "Key": output_key,
+            "ResponseContentDisposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+        },
+        ExpiresIn=PRESIGNED_URL_EXPIRATION,
+    )
+
+    # 正規化ファイルのURL（output_keyから推測）
+    # output_key: output/{output_id}.wav
+    output_id = Path(output_key).stem
+    input_norm_key = f"{S3_OUTPUT_PREFIX}normalized/input_{output_id}.wav"
+    output_norm_key = f"{S3_OUTPUT_PREFIX}normalized/output_{output_id}.wav"
+
+    try:
+        urls["input_normalized_url"] = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": S3_BUCKET, "Key": input_norm_key},
+            ExpiresIn=PRESIGNED_URL_EXPIRATION,
+        )
+        urls["output_normalized_url"] = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": S3_BUCKET, "Key": output_norm_key},
+            ExpiresIn=PRESIGNED_URL_EXPIRATION,
+        )
+    except ClientError:
+        pass
+
+    return urls
+
+
+def _job_to_response(job: dict, urls: dict | None = None) -> JobResponse:
+    """DynamoDBのジョブをレスポンス形式に変換"""
+    effect_chain = job.get("effect_chain", [])
+    # DynamoDBから取得した場合はdictのリスト
+    effect_configs = []
+    for e in effect_chain:
+        if isinstance(e, dict):
+            from .schemas import EffectConfig
+
+            effect_configs.append(EffectConfig(name=e.get("name", ""), params=e.get("params")))
+        else:
+            effect_configs.append(e)
+
+    return JobResponse(
+        job_id=job["job_id"],
+        status=job["status"],
+        effect_chain=effect_configs,
+        original_filename=job.get("original_filename"),
+        created_at=job["created_at"],
+        updated_at=job["updated_at"],
+        completed_at=job.get("completed_at"),
+        error_message=job.get("error_message"),
+        download_url=urls.get("download_url") if urls else None,
+        input_normalized_url=urls.get("input_normalized_url") if urls else None,
+        output_normalized_url=urls.get("output_normalized_url") if urls else None,
+    )
+
+
+@router.get("/jobs/{job_id}", response_model=JobResponse)
+async def get_job(job_id: str):
+    """ジョブ情報を取得"""
+    from lib.job_service import get_job as get_job_from_db
+
+    job = get_job_from_db(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    urls = {}
+    if job.get("status") == "completed" and S3_BUCKET:
+        try:
+            s3 = get_s3_client()
+            urls = _generate_presigned_urls_for_job(s3, job)
+        except ClientError:
+            pass
+
+    return _job_to_response(job, urls)
+
+
+@router.post("/jobs/batch", response_model=BatchJobsResponse)
+async def get_jobs_batch(request: BatchJobsRequest):
+    """複数ジョブを一括取得"""
+    from lib.job_service import get_jobs_batch as get_jobs_batch_from_db
+
+    if not request.job_ids:
+        return BatchJobsResponse(jobs=[])
+
+    # 最大100件に制限
+    job_ids = request.job_ids[:100]
+    jobs = get_jobs_batch_from_db(job_ids)
+
+    s3 = None
+    if S3_BUCKET:
+        try:
+            s3 = get_s3_client()
+        except ClientError:
+            pass
+
+    responses = []
+    for job in jobs:
+        urls = {}
+        if s3 and job.get("status") == "completed":
+            try:
+                urls = _generate_presigned_urls_for_job(s3, job)
+            except ClientError:
+                pass
+        responses.append(_job_to_response(job, urls))
+
+    return BatchJobsResponse(jobs=responses)

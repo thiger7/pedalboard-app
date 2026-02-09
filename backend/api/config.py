@@ -16,6 +16,10 @@ PRESIGNED_URL_EXPIRATION = 3600  # 1 hour
 ENV = os.environ.get("ENV", "development")
 IS_PRODUCTION = ENV == "production"
 
+# SQS settings (for async processing)
+SQS_QUEUE_URL = os.environ.get("SQS_QUEUE_URL", "")
+ASYNC_PROCESSING_ENABLED = bool(SQS_QUEUE_URL)
+
 CORS_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",

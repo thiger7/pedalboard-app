@@ -247,20 +247,20 @@ class TestS3DownloadUrl:
             assert data["download_url"] == "https://s3.example.com/download"
 
 
-class TestS3Process:
-    """S3 音声処理のテスト"""
+class TestS3ProcessSync:
+    """S3 音声同期処理のテスト"""
 
-    def test_s3_process_fails_without_bucket(self, client):
+    def test_s3_process_sync_fails_without_bucket(self, client):
         """S3 バケットが設定されていない場合は 500 を返す"""
         response = client.post(
-            "/api/s3-process",
+            "/api/s3-process-sync",
             json={"s3_key": "input/test.wav", "effect_chain": []},
         )
         assert response.status_code == 500
         assert "S3 bucket not configured" in response.json()["detail"]
 
-    def test_s3_process_returns_normalized_urls(self, client, tmp_path):
-        """S3 処理が正規化 URL を返す"""
+    def test_s3_process_sync_returns_normalized_urls(self, client, tmp_path):
+        """S3 同期処理が正規化 URL を返す"""
         import numpy as np
         from pedalboard.io import AudioFile
 
@@ -286,7 +286,7 @@ class TestS3Process:
             patch("api.routes.get_s3_client", return_value=mock_s3),
         ):
             response = client.post(
-                "/api/s3-process",
+                "/api/s3-process-sync",
                 json={
                     "s3_key": "input/test.wav",
                     "effect_chain": [{"name": "reverb", "params": {}}],
@@ -304,8 +304,8 @@ class TestS3Process:
             assert "normalized" in data["input_normalized_url"]
             assert "normalized" in data["output_normalized_url"]
 
-    def test_s3_process_uses_original_filename_in_download(self, client, tmp_path):
-        """S3 処理でダウンロードファイル名に元のファイル名が使われる"""
+    def test_s3_process_sync_uses_original_filename_in_download(self, client, tmp_path):
+        """S3 同期処理でダウンロードファイル名に元のファイル名が使われる"""
         import numpy as np
         from pedalboard.io import AudioFile
 
@@ -336,7 +336,7 @@ class TestS3Process:
             patch("api.routes.get_s3_client", return_value=mock_s3),
         ):
             response = client.post(
-                "/api/s3-process",
+                "/api/s3-process-sync",
                 json={
                     "s3_key": "input/test.wav",
                     "effect_chain": [{"name": "reverb", "params": {}}],
@@ -351,8 +351,8 @@ class TestS3Process:
             assert "my_guitar_" in captured_params["disposition"]
             assert ".wav" in captured_params["disposition"]
 
-    def test_s3_process_encodes_japanese_filename(self, client, tmp_path):
-        """S3 処理で日本語ファイル名が正しくエンコードされる"""
+    def test_s3_process_sync_encodes_japanese_filename(self, client, tmp_path):
+        """S3 同期処理で日本語ファイル名が正しくエンコードされる"""
         import numpy as np
         from pedalboard.io import AudioFile
 
@@ -383,7 +383,7 @@ class TestS3Process:
             patch("api.routes.get_s3_client", return_value=mock_s3),
         ):
             response = client.post(
-                "/api/s3-process",
+                "/api/s3-process-sync",
                 json={
                     "s3_key": "input/test.wav",
                     "effect_chain": [{"name": "reverb", "params": {}}],
@@ -398,3 +398,146 @@ class TestS3Process:
             # 「単音」は URL エンコードされるので直接含まれない
             assert "%E5%8D%98%E9%9F%B3" in captured_params["disposition"]  # 「単音」のURLエンコード
             assert ".wav" in captured_params["disposition"]
+
+
+class TestJobEndpoints:
+    """ジョブ管理エンドポイントのテスト"""
+
+    def test_get_job_returns_404_when_not_found(self, client):
+        """存在しないジョブは 404 を返す"""
+        with patch("lib.job_service.get_job", return_value=None):
+            response = client.get("/api/jobs/nonexistent")
+            assert response.status_code == 404
+            assert "Job not found" in response.json()["detail"]
+
+    def test_get_job_returns_job_info(self, client):
+        """ジョブ情報を返す"""
+        mock_job = {
+            "job_id": "abc123",
+            "status": "pending",
+            "effect_chain": [{"name": "Reverb", "params": {}}],
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z",
+        }
+        with patch("lib.job_service.get_job", return_value=mock_job):
+            response = client.get("/api/jobs/abc123")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["job_id"] == "abc123"
+            assert data["status"] == "pending"
+
+    def test_get_job_includes_download_url_when_completed(self, client):
+        """完了したジョブはダウンロードURLを含む"""
+        mock_job = {
+            "job_id": "abc123",
+            "status": "completed",
+            "output_key": "output/result.wav",
+            "effect_chain": [],
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:31:00Z",
+            "completed_at": "2024-01-15T10:31:00Z",
+        }
+        mock_s3 = MagicMock()
+        mock_s3.generate_presigned_url.return_value = "https://s3.example.com/download"
+
+        with (
+            patch("lib.job_service.get_job", return_value=mock_job),
+            patch("api.routes.S3_BUCKET", "test-bucket"),
+            patch("api.routes.get_s3_client", return_value=mock_s3),
+        ):
+            response = client.get("/api/jobs/abc123")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["download_url"] is not None
+
+    def test_batch_get_jobs_returns_empty_for_empty_request(self, client):
+        """空のリクエストに対して空のリストを返す"""
+        response = client.post("/api/jobs/batch", json={"job_ids": []})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["jobs"] == []
+
+    def test_batch_get_jobs_returns_jobs(self, client):
+        """複数ジョブを返す"""
+        mock_jobs = [
+            {
+                "job_id": "abc123",
+                "status": "completed",
+                "effect_chain": [],
+                "created_at": "2024-01-15T10:30:00Z",
+                "updated_at": "2024-01-15T10:31:00Z",
+            },
+            {
+                "job_id": "def456",
+                "status": "pending",
+                "effect_chain": [],
+                "created_at": "2024-01-15T10:32:00Z",
+                "updated_at": "2024-01-15T10:32:00Z",
+            },
+        ]
+        with patch("lib.job_service.get_jobs_batch", return_value=mock_jobs):
+            response = client.post(
+                "/api/jobs/batch", json={"job_ids": ["abc123", "def456"]}
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data["jobs"]) == 2
+
+
+class TestS3ProcessAsync:
+    """S3 非同期処理のテスト"""
+
+    def test_s3_process_fails_without_async_config(self, client):
+        """非同期設定がない場合は 500 を返す"""
+        with (
+            patch("api.routes.S3_BUCKET", "test-bucket"),
+            patch("api.routes.ASYNC_PROCESSING_ENABLED", False),
+        ):
+            response = client.post(
+                "/api/s3-process",
+                json={"s3_key": "input/test.wav", "effect_chain": []},
+            )
+            assert response.status_code == 500
+            assert "Async processing not configured" in response.json()["detail"]
+
+    def test_s3_process_returns_job_id(self, client):
+        """非同期処理でジョブIDを返す"""
+        mock_job = {
+            "job_id": "abc123",
+            "status": "pending",
+        }
+
+        with (
+            patch("api.routes.S3_BUCKET", "test-bucket"),
+            patch("api.routes.ASYNC_PROCESSING_ENABLED", True),
+            patch("lib.job_service.create_job", return_value=mock_job),
+            patch("lib.sqs.send_job_message", return_value=True),
+        ):
+            response = client.post(
+                "/api/s3-process",
+                json={
+                    "s3_key": "input/test.wav",
+                    "effect_chain": [{"name": "Reverb", "params": {}}],
+                },
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["job_id"] == "abc123"
+            assert data["status"] == "pending"
+
+    def test_s3_process_fails_when_sqs_send_fails(self, client):
+        """SQS送信失敗時は 500 を返す"""
+        mock_job = {"job_id": "abc123", "status": "pending"}
+
+        with (
+            patch("api.routes.S3_BUCKET", "test-bucket"),
+            patch("api.routes.ASYNC_PROCESSING_ENABLED", True),
+            patch("lib.job_service.create_job", return_value=mock_job),
+            patch("lib.sqs.send_job_message", return_value=False),
+        ):
+            response = client.post(
+                "/api/s3-process",
+                json={"s3_key": "input/test.wav", "effect_chain": []},
+            )
+            assert response.status_code == 500
+            assert "Failed to queue job" in response.json()["detail"]
