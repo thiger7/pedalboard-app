@@ -32,3 +32,28 @@ output "lambda_function_name" {
   description = "Lambda function name"
   value       = aws_lambda_function.processor.function_name
 }
+
+output "dynamodb_table_name" {
+  description = "DynamoDB jobs table name"
+  value       = aws_dynamodb_table.jobs.name
+}
+
+output "dynamodb_table_arn" {
+  description = "DynamoDB jobs table ARN"
+  value       = aws_dynamodb_table.jobs.arn
+}
+
+output "sqs_queue_url" {
+  description = "SQS jobs queue URL"
+  value       = aws_sqs_queue.jobs.url
+}
+
+output "sqs_queue_arn" {
+  description = "SQS jobs queue ARN"
+  value       = aws_sqs_queue.jobs.arn
+}
+
+output "worker_lambda_function_name" {
+  description = "Worker Lambda function name"
+  value       = aws_lambda_function.worker.function_name
+}

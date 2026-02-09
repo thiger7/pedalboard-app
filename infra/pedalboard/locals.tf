@@ -13,4 +13,13 @@ locals {
 
   # ECR
   ecr_repository_name = "${local.project_name}/lambda"
+
+  # DynamoDB
+  dynamodb_table_name = "${local.name_prefix}-jobs"
+
+  # SQS
+  sqs_queue_name = "${local.name_prefix}-jobs"
+
+  # Lambda (Worker)
+  worker_lambda_function_name = "${local.name_prefix}-worker"
 }

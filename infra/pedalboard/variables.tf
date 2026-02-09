@@ -38,3 +38,23 @@ variable "lambda_timeout" {
   type        = number
   default     = 30
 }
+
+# DynamoDB
+variable "job_ttl_days" {
+  description = "Job TTL in days (how long to keep job records)"
+  type        = number
+  default     = 7
+}
+
+# SQS
+variable "sqs_visibility_timeout" {
+  description = "SQS visibility timeout in seconds (should be >= Lambda timeout)"
+  type        = number
+  default     = 120
+}
+
+variable "sqs_message_retention" {
+  description = "SQS message retention in seconds (default 4 days)"
+  type        = number
+  default     = 345600
+}
