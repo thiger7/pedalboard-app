@@ -57,17 +57,26 @@ https://d19nkieanqwfv8.cloudfront.net/
   - OAC (Origin Access Control) で CloudFront からのみアクセス可能
 - **API Gateway (HTTP API)** - REST API エンドポイント
   - Lambda へのプロキシ統合
-- **Lambda (arm64)** - バックエンド処理
-  - ECR コンテナイメージ
+- **Lambda (Processor)** - API ハンドラー
+  - ECR コンテナイメージ (arm64)
   - FastAPI アプリケーション
+- **Lambda (Worker)** - 音声処理ワーカー
+  - SQS トリガーで起動
+  - 音声ファイルにエフェクトを適用
 - **S3 (Audio)** - 音声ファイルストレージ
   - `input/` - アップロードされた入力ファイル
   - `output/` - エフェクト適用後の出力ファイル
   - `output/normalized/` - 波形表示用の正規化ファイル
   - ライフサイクルルール: 7日で自動削除
+- **SQS** - 非同期ジョブキュー
+  - Jobs Queue - 音声処理ジョブ
+  - Dead Letter Queue - 失敗したジョブ
+- **DynamoDB** - ジョブ管理
+  - ジョブのステータス管理 (pending → processing → completed/failed)
+  - TTL: 7日で自動削除
 - **ECR** - Lambda 用コンテナレジストリ
 - **CloudWatch Logs** - ログ管理
-  - `/aws/lambda/...` - Lambda ログ
+  - `/aws/lambda/...` - Lambda ログ (Processor, Worker)
   - `/aws/apigateway/...` - API Gateway ログ
 
 ### インフラ管理
