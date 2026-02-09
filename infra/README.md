@@ -5,6 +5,8 @@
 - **Frontend**: S3 + CloudFront
 - **Backend**: Lambda (Container Image) + API Gateway
 - **Storage**: S3 (audio files)
+- **Database**: DynamoDB (job management)
+- **Messaging**: SQS (async job queue) + DLQ
 
 ## Prerequisites
 
@@ -147,9 +149,13 @@ terraform apply -var-file=env/prod/inputs.tfvars
 
 | Resource | Name |
 |----------|------|
-| Lambda Function | `pedalboard-demo-prod-processor` |
+| Lambda Function (API) | `pedalboard-demo-prod-processor` |
+| Lambda Function (Worker) | `pedalboard-demo-prod-worker` |
 | ECR Repository | `pedalboard-demo/lambda` |
 | Frontend S3 Bucket | `pedalboard-demo-prod-frontend` |
 | Audio S3 Bucket | `pedalboard-demo-prod-audio` |
+| DynamoDB Table | `pedalboard-demo-prod-jobs` |
+| SQS Queue | `pedalboard-demo-prod-jobs` |
+| SQS Dead Letter Queue | `pedalboard-demo-prod-jobs-dlq` |
 
 Environment-specific values (AWS Account ID, CloudFront ID, etc.) are defined in `.envrc`.
