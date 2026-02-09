@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY lib/ ./lib/
 COPY api/ ./api/
+COPY worker/ ./worker/
 COPY main.py .
 COPY lambda_function.py .
 
@@ -37,6 +38,7 @@ RUN dnf install -y libatomic libsndfile && dnf clean all
 COPY --from=base /usr/local/lib/python3.14/site-packages /var/lang/lib/python3.14/site-packages
 COPY --from=base /app/lib ${LAMBDA_TASK_ROOT}/lib
 COPY --from=base /app/api ${LAMBDA_TASK_ROOT}/api
+COPY --from=base /app/worker ${LAMBDA_TASK_ROOT}/worker
 COPY --from=base /app/main.py ${LAMBDA_TASK_ROOT}/
 COPY --from=base /app/lambda_function.py ${LAMBDA_TASK_ROOT}/
 
