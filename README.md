@@ -48,7 +48,7 @@ https://d19nkieanqwfv8.cloudfront.net/
 
 ## AWS アーキテクチャ
 
-<img src="infra/architecture.png" alt="AWS Architecture" width="600">
+![AWS Architecture](infra/architecture.png)
 
 - **CloudFront** - 統一エントリーポイント
   - `/*` → S3 (Frontend) へルーティング
