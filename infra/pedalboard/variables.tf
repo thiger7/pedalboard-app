@@ -58,3 +58,15 @@ variable "sqs_message_retention" {
   type        = number
   default     = 345600
 }
+
+# Domain
+variable "domain_name" {
+  description = "Root domain name"
+  type        = string
+}
+
+variable "subdomain" {
+  description = "Subdomain for this app (e.g. pedalboard)"
+  type        = string
+  default     = "pedalboard"
+}

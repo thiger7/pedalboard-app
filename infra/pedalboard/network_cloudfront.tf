@@ -90,7 +90,11 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
+  aliases = [local.fqdn]
+
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.app.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2025"
   }
 }

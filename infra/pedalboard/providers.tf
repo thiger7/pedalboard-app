@@ -22,3 +22,19 @@ provider "aws" {
     }
   }
 }
+
+# ACM certificates for CloudFront must be in us-east-1
+provider "aws" {
+  alias   = "virginia"
+  region  = "us-east-1"
+  profile = var.aws_profile
+
+  default_tags {
+    tags = {
+      project   = local.project_name
+      env       = local.environment
+      service   = "pedalboard"
+      ManagedBy = "Terraform"
+    }
+  }
+}

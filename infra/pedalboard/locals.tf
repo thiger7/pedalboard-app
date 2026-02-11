@@ -22,4 +22,7 @@ locals {
 
   # Lambda (Worker)
   worker_lambda_function_name = "${local.name_prefix}-worker"
+
+  # Domain
+  fqdn = "${var.subdomain}.${var.domain_name}"
 }
