@@ -10,7 +10,7 @@
 
 ## URL
 
-https://d19nkieanqwfv8.cloudfront.net/
+https://pedalboard.thiger7.com/
 
 ## エフェクト一覧
 
