@@ -30,7 +30,7 @@ EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 ## Lambda stage
-FROM public.ecr.aws/lambda/python:3.14 AS lambda
+FROM public.ecr.aws/lambda/python:3.15 AS lambda
 
 # Install required system libraries for Pedalboard
 RUN dnf install -y libatomic libsndfile && dnf clean all
